@@ -52,6 +52,8 @@ In consolidated mode the native endpoints are Passbolt on ports 80/443 and Nextc
 
 Passbolt is configured for HTTPS using a self-signed certificate whose subject alternative names include the detected public IP and, when provided, `passbolt_domain`. HTTP redirects to HTTPS. Browsers will warn until the certificate is explicitly trusted; for production, replace it with a certificate from a trusted CA or put a managed TLS load balancer/reverse proxy in front. Restrict SSH with `admin_cidr`; the application CIDR defaults should also be narrowed for private deployments.
 
+The installer also creates Passbolt's RSA-3072 OpenPGP server keypair without a passphrase or expiration, stores it under `/etc/passbolt/gpg`, configures its fingerprint, and runs the Passbolt GPG health check. Back up both server-key files securely; losing the private server key can disrupt Passbolt authentication and encrypted server operations.
+
 The generated cloud-init and Terraform state contain secrets. Use encrypted remote state with tightly restricted access.
 
 ## Local deployment

@@ -108,6 +108,36 @@ echo 'passbolt-ce-server passbolt/nginx-configuration-two-choices select none' |
 printf 'passbolt-ce-server passbolt/nginx-domain string %s\n' "$PASSBOLT_DOMAIN" | debconf-set-selections
 apt-get install -y --no-install-recommends passbolt-ce-server
 
+PASSBOLT_GPG_DIR=/etc/passbolt/gpg
+PASSBOLT_GPG_HOME=/var/lib/passbolt/.gnupg
+install -d -o www-data -g www-data -m 0750 "$PASSBOLT_GPG_DIR"
+install -d -o www-data -g www-data -m 0700 "$PASSBOLT_GPG_HOME"
+if [ ! -s "$PASSBOLT_GPG_DIR/serverkey.asc" ] || [ ! -s "$PASSBOLT_GPG_DIR/serverkey_private.asc" ]; then
+  GPG_TEMP_HOME=$(mktemp -d)
+  chmod 0700 "$GPG_TEMP_HOME"
+  gpg --homedir "$GPG_TEMP_HOME" --batch --no-tty --gen-key <<'GPGKEY'
+Key-Type: RSA
+Key-Length: 3072
+Key-Usage: sign,cert
+Subkey-Type: RSA
+Subkey-Length: 3072
+Subkey-Usage: encrypt
+Name-Real: Passbolt server
+Name-Email: passbolt@localhost
+Expire-Date: 0
+%no-protection
+%commit
+GPGKEY
+  gpg --homedir "$GPG_TEMP_HOME" --armor --export passbolt@localhost >"$PASSBOLT_GPG_DIR/serverkey.asc"
+  gpg --homedir "$GPG_TEMP_HOME" --armor --export-secret-keys passbolt@localhost >"$PASSBOLT_GPG_DIR/serverkey_private.asc"
+  rm -rf "$GPG_TEMP_HOME"
+fi
+chown www-data:www-data "$PASSBOLT_GPG_DIR/serverkey.asc" "$PASSBOLT_GPG_DIR/serverkey_private.asc"
+chmod 0644 "$PASSBOLT_GPG_DIR/serverkey.asc"
+chmod 0600 "$PASSBOLT_GPG_DIR/serverkey_private.asc"
+PASSBOLT_GPG_FINGERPRINT=$(gpg --batch --with-colons --show-keys "$PASSBOLT_GPG_DIR/serverkey.asc" | awk -F: '$1 == "fpr" { print $10; exit }')
+[ -n "$PASSBOLT_GPG_FINGERPRINT" ]
+
 install -d -m 0755 /etc/passbolt/tls
 cat >/tmp/passbolt-openssl.cnf <<EOF
 [req]
@@ -155,11 +185,17 @@ return [
         'password' => base64_decode('${passbolt_db_password_b64}'),
         'database' => 'passbolt',
     ]],
+    'passbolt' => ['gpg' => ['serverKey' => [
+        'fingerprint' => '$PASSBOLT_GPG_FINGERPRINT',
+        'public' => '/etc/passbolt/gpg/serverkey.asc',
+        'private' => '/etc/passbolt/gpg/serverkey_private.asc',
+    ]]],
 ];
 PHP
 chown root:www-data "$PASSBOLT_CONFIG"
 chmod 0640 "$PASSBOLT_CONFIG"
 sudo -H -u www-data /usr/share/php/passbolt/bin/cake passbolt migrate || true
+sudo -H -u www-data /usr/share/php/passbolt/bin/cake passbolt healthcheck --gpg
 nginx -t
 systemctl enable --now mariadb apache2 nginx
 touch /var/lib/privacy-stack-ready
