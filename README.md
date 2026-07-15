@@ -13,7 +13,7 @@ Supported roots: `aws`, `azure`, `gcp`, `openstack`, and `oci`.
 | [![Deploy on AWS](https://img.shields.io/badge/Deploy-AWS-FF9900?style=for-the-badge&logo=amazonwebservices&logoColor=white)](aws) | [![Deploy on Azure](https://img.shields.io/badge/Deploy-Azure-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white)](azure) | [![Deploy on Google Cloud](https://img.shields.io/badge/Deploy-Google_Cloud-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](gcp) |
 | [![Deploy on OCI](https://img.shields.io/badge/Deploy-Oracle_Cloud-F80000?style=for-the-badge&logo=oracle&logoColor=white)](oci) | [![Deploy on OpenStack](https://img.shields.io/badge/Deploy-OpenStack-ED1944?style=for-the-badge&logo=openstack&logoColor=white)](openstack) | |
 
-The buttons currently open the selected provider configuration. To turn them into direct guided deployments, create the five env0 templates described in [ENV0_PUBLIC_DEPLOYMENT.md](ENV0_PUBLIC_DEPLOYMENT.md), then replace each relative link with the generated env0 launch URL.
+The buttons currently open the selected provider configuration. 
 
 ## Deployment topology
 
@@ -64,5 +64,3 @@ terraform init
 terraform plan
 terraform apply
 ```
-
-To generate the downloadable multicloud archive, run `make bundle` from the repository root.
