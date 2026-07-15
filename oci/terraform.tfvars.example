@@ -1,0 +1,30 @@
+region = "eu-frankfurt-1"
+# deployment_mode = "distributed"
+compartment_id = "ocid1.compartment.oc1..."
+# API-key authentication. In HCP Terraform/env0, set private_key to the entire
+# PEM value as a sensitive workspace variable; do not use a workstation path.
+# tenancy_ocid = "ocid1.tenancy.oc1..."
+# user_ocid = "ocid1.user.oc1..."
+# fingerprint = "aa:bb:cc:..."
+# private_key = <<-EOT
+# -----BEGIN PRIVATE KEY-----
+# ...
+# -----END PRIVATE KEY-----
+# EOT
+# Optional: reuse existing resources. Omit to discover the availability domain
+# and Ubuntu image and create a VCN, subnet, gateway, and route table.
+# availability_domain = "xxxx:EU-FRANKFURT-1-AD-1"
+# subnet_id = "ocid1.subnet.oc1..."
+# image_id = "ocid1.image.oc1..."
+# Optional exact catalog version filter; OCI labels can vary by region/image family.
+# image_operating_system_version = "24.04"
+admin_cidr = "203.0.113.10/32"
+# Supply content (recommended for remote runners), or a path for local runs:
+ssh_public_key = "ssh-ed25519 AAAA..."
+# ssh_authorized_keys_path = "/home/user/.ssh/id_rsa.pub"
+# Optional. Omit to configure the applications with the instance public IP.
+# passbolt_domain = "passbolt.example.com"
+mariadb_root_password = "replace-me"
+nextcloud_db_password = "replace-me"
+passbolt_db_password = "replace-me"
+nextcloud_admin_password = "replace-me"

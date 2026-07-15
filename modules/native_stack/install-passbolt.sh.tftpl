@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exec > >(tee -a /var/log/privacy-stack-install.log) 2>&1
+export DEBIAN_FRONTEND=noninteractive
+decode() { printf '%s' "$1" | base64 -d; }
+DB_HOST=$(decode '${database_host_b64}')
+DB_PASSWORD_B64='${passbolt_db_password_b64}'
+PUBLIC_HOST=$(decode '${passbolt_domain_b64}')
+
+apt-get update
+apt-get install -y ca-certificates curl gnupg
+cd /tmp
+curl -fsSLO https://download.passbolt.com/ce/installer/passbolt-repo-setup.ce.sh
+curl -fsSLo passbolt-ce-SHA512SUM.txt https://github.com/passbolt/passbolt-dep-scripts/releases/latest/download/passbolt-ce-SHA512SUM.txt
+sha512sum -c passbolt-ce-SHA512SUM.txt
+bash ./passbolt-repo-setup.ce.sh
+echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
+echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
+apt-get install -y nginx jq mariadb-client iptables-persistent
+if [ -z "$PUBLIC_HOST" ]; then PUBLIC_HOST=$(curl -4 -fsS --max-time 10 https://api.ipify.org || true); fi
+if [ -z "$PUBLIC_HOST" ]; then PUBLIC_HOST=$(hostname -I | awk '{print $1}'); fi
+PUBLIC_HOST_B64=$(printf '%s' "$PUBLIC_HOST" | base64 -w0)
+for port in 80 443; do
+  iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p tcp --dport "$port" -j ACCEPT
+done
+netfilter-persistent save
+
+echo 'passbolt-ce-server passbolt/mysql-configuration boolean false' | debconf-set-selections
+echo 'passbolt-ce-server passbolt/nginx-configuration boolean true' | debconf-set-selections
+echo 'passbolt-ce-server passbolt/nginx-configuration-two-choices select none' | debconf-set-selections
+printf 'passbolt-ce-server passbolt/nginx-domain string %s\n' "$PUBLIC_HOST" | debconf-set-selections
+apt-get install -y --no-install-recommends passbolt-ce-server
+cat >/etc/passbolt/passbolt.php <<PHP
+<?php
+return [
+    'App' => ['fullBaseUrl' => 'http://' . base64_decode('$PUBLIC_HOST_B64')],
+    'Datasources' => ['default' => [
+        'host' => base64_decode('${database_host_b64}'),
+        'port' => '3306',
+        'username' => 'passbolt',
+        'password' => base64_decode('$DB_PASSWORD_B64'),
+        'database' => 'passbolt',
+    ]],
+];
+PHP
+chown root:www-data /etc/passbolt/passbolt.php
+chmod 0640 /etc/passbolt/passbolt.php
+for attempt in $(seq 1 60); do
+  mysqladmin ping -h "$DB_HOST" -u passbolt --password="$(decode "$DB_PASSWORD_B64")" --silent && break
+  sleep 5
+done
+sudo -H -u www-data /usr/share/php/passbolt/bin/cake passbolt migrate
+systemctl enable --now nginx
+touch /var/lib/privacy-stack-ready

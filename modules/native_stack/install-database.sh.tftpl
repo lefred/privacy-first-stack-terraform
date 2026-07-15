@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exec > >(tee -a /var/log/privacy-stack-install.log) 2>&1
+export DEBIAN_FRONTEND=noninteractive
+
+decode() { printf '%s' "$1" | base64 -d; }
+sql_escape() { printf '%s' "$1" | sed "s/'/''/g"; }
+ROOT_DB_PASSWORD=$(sql_escape "$(decode '${mariadb_root_password_b64}')")
+NEXTCLOUD_DB_PASSWORD=$(sql_escape "$(decode '${nextcloud_db_password_b64}')")
+PASSBOLT_DB_PASSWORD=$(sql_escape "$(decode '${passbolt_db_password_b64}')")
+
+apt-get update
+echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
+echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
+apt-get install -y mariadb-server iptables-persistent
+systemctl enable --now mariadb
+
+cat >/etc/mysql/mariadb.conf.d/60-privacy-stack.cnf <<'EOF'
+[mysqld]
+bind-address = 0.0.0.0
+skip-name-resolve
+EOF
+
+mysql <<SQL
+ALTER USER 'root'@'localhost' IDENTIFIED BY '$ROOT_DB_PASSWORD';
+CREATE DATABASE IF NOT EXISTS nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'nextcloud'@'%' IDENTIFIED BY '$NEXTCLOUD_DB_PASSWORD';
+ALTER USER 'nextcloud'@'%' IDENTIFIED BY '$NEXTCLOUD_DB_PASSWORD';
+GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'%';
+CREATE DATABASE IF NOT EXISTS passbolt CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'passbolt'@'%' IDENTIFIED BY '$PASSBOLT_DB_PASSWORD';
+ALTER USER 'passbolt'@'%' IDENTIFIED BY '$PASSBOLT_DB_PASSWORD';
+GRANT ALL PRIVILEGES ON passbolt.* TO 'passbolt'@'%';
+FLUSH PRIVILEGES;
+SQL
+
+iptables -C INPUT -p tcp --dport 3306 -s '${database_allowed_cidr}' -j ACCEPT 2>/dev/null || \
+  iptables -I INPUT 1 -p tcp --dport 3306 -s '${database_allowed_cidr}' -j ACCEPT
+iptables -C INPUT -p tcp --dport 3306 -j DROP 2>/dev/null || \
+  iptables -A INPUT -p tcp --dport 3306 -j DROP
+netfilter-persistent save
+systemctl restart mariadb
+touch /var/lib/privacy-stack-ready

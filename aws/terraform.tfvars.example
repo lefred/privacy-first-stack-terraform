@@ -1,0 +1,11 @@
+region = "eu-west-1"
+# deployment_mode = "distributed"
+# Optional: reuse an existing subnet. Omit to create a complete VPC and subnet.
+# subnet_id = "subnet-..."
+admin_cidr = "203.0.113.10/32"
+ssh_public_key = "ssh-ed25519 AAAA..."
+passbolt_domain = "passbolt.example.com"
+mariadb_root_password = "replace-me"
+nextcloud_db_password = "replace-me"
+passbolt_db_password = "replace-me"
+nextcloud_admin_password = "replace-me"

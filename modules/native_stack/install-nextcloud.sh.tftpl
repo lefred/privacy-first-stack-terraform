@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exec > >(tee -a /var/log/privacy-stack-install.log) 2>&1
+export DEBIAN_FRONTEND=noninteractive
+decode() { printf '%s' "$1" | base64 -d; }
+DB_HOST=$(decode '${database_host_b64}')
+DB_PASSWORD=$(decode '${nextcloud_db_password_b64}')
+ADMIN_USER=$(decode '${nextcloud_admin_user_b64}')
+ADMIN_PASSWORD=$(decode '${nextcloud_admin_password_b64}')
+PUBLIC_HOST=$(decode '${passbolt_domain_b64}')
+
+apt-get update
+echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
+echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
+apt-get install -y apache2 curl bzip2 jq mariadb-client iptables-persistent libapache2-mod-php php php-cli \
+  php-curl php-gd php-mbstring php-mysql php-xml php-zip php-bz2 php-intl php-gmp php-imagick php-apcu
+systemctl stop apache2 || true
+if [ -z "$PUBLIC_HOST" ]; then
+  PUBLIC_HOST=$(curl -4 -fsS --max-time 10 https://api.ipify.org || true)
+fi
+if [ -z "$PUBLIC_HOST" ]; then PUBLIC_HOST=$(hostname -I | awk '{print $1}'); fi
+
+for port in 8080; do
+  iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p tcp --dport "$port" -j ACCEPT
+done
+netfilter-persistent save
+sed -i 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf
+a2enmod rewrite headers env dir mime setenvif
+curl -fsSLo /tmp/nextcloud.tar.bz2 https://download.nextcloud.com/server/releases/latest.tar.bz2
+tar -xjf /tmp/nextcloud.tar.bz2 -C /var/www
+chown -R www-data:www-data /var/www/nextcloud
+cat >/etc/apache2/sites-available/nextcloud.conf <<'APACHE'
+<VirtualHost *:8080>
+  DocumentRoot /var/www/nextcloud
+  <Directory /var/www/nextcloud>
+    Require all granted
+    AllowOverride All
+    Options FollowSymLinks MultiViews
+  </Directory>
+</VirtualHost>
+APACHE
+a2dissite 000-default
+a2ensite nextcloud
+systemctl restart apache2
+
+for attempt in $(seq 1 60); do
+  mysqladmin ping -h "$DB_HOST" -u nextcloud --password="$DB_PASSWORD" --silent && break
+  sleep 5
+done
+sudo -u www-data php /var/www/nextcloud/occ maintenance:install \
+  --database mysql --database-host "$DB_HOST" --database-name nextcloud \
+  --database-user nextcloud --database-pass "$DB_PASSWORD" \
+  --admin-user "$ADMIN_USER" --admin-pass "$ADMIN_PASSWORD"
+sudo -u www-data php /var/www/nextcloud/occ config:system:set trusted_domains 1 --value="$PUBLIC_HOST"
+sudo -u www-data php /var/www/nextcloud/occ config:system:set overwrite.cli.url --value="http://$PUBLIC_HOST:8080"
+touch /var/lib/privacy-stack-ready
