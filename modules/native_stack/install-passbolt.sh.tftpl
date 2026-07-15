@@ -6,9 +6,10 @@ decode() { printf '%s' "$1" | base64 -d; }
 DB_HOST=$(decode '${database_host_b64}')
 DB_PASSWORD_B64='${passbolt_db_password_b64}'
 PUBLIC_HOST=$(decode '${passbolt_domain_b64}')
+PUBLIC_IP=""
 
 apt-get update
-apt-get install -y ca-certificates curl gnupg
+apt-get install -y ca-certificates curl gnupg openssl
 cd /tmp
 curl -fsSLO https://download.passbolt.com/ce/installer/passbolt-repo-setup.ce.sh
 curl -fsSLo passbolt-ce-SHA512SUM.txt https://github.com/passbolt/passbolt-dep-scripts/releases/latest/download/passbolt-ce-SHA512SUM.txt
@@ -17,8 +18,16 @@ bash ./passbolt-repo-setup.ce.sh
 echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
 echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
 apt-get install -y nginx jq mariadb-client iptables-persistent
-if [ -z "$PUBLIC_HOST" ]; then PUBLIC_HOST=$(curl -4 -fsS --max-time 10 https://api.ipify.org || true); fi
-if [ -z "$PUBLIC_HOST" ]; then PUBLIC_HOST=$(hostname -I | awk '{print $1}'); fi
+for attempt in $(seq 1 15); do
+  PUBLIC_IP=$(curl -fsS -H 'Authorization: Bearer Oracle' \
+    http://169.254.169.254/opc/v2/vnics/ 2>/dev/null | \
+    jq -r 'map(select(.publicIp != null))[0].publicIp // empty')
+  [ -n "$PUBLIC_IP" ] && break
+  sleep 2
+done
+if [ -z "$PUBLIC_IP" ]; then PUBLIC_IP=$(curl -4 -fsS --max-time 10 https://api.ipify.org || true); fi
+if [ -z "$PUBLIC_IP" ]; then PUBLIC_IP=$(hostname -I | awk '{print $1}'); fi
+if [ -z "$PUBLIC_HOST" ]; then PUBLIC_HOST="$PUBLIC_IP"; fi
 PUBLIC_HOST_B64=$(printf '%s' "$PUBLIC_HOST" | base64 -w0)
 for port in 80 443; do
   iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -p tcp --dport "$port" -j ACCEPT
@@ -30,10 +39,45 @@ echo 'passbolt-ce-server passbolt/nginx-configuration boolean true' | debconf-se
 echo 'passbolt-ce-server passbolt/nginx-configuration-two-choices select none' | debconf-set-selections
 printf 'passbolt-ce-server passbolt/nginx-domain string %s\n' "$PUBLIC_HOST" | debconf-set-selections
 apt-get install -y --no-install-recommends passbolt-ce-server
+
+install -d -m 0755 /etc/passbolt/tls
+cat >/tmp/passbolt-openssl.cnf <<EOF
+[req]
+distinguished_name = dn
+x509_extensions = v3_req
+prompt = no
+[dn]
+CN = $PUBLIC_IP
+[v3_req]
+subjectAltName = @alt_names
+[alt_names]
+IP.1 = $PUBLIC_IP
+EOF
+if [ "$PUBLIC_HOST" != "$PUBLIC_IP" ]; then
+  printf 'DNS.1 = %s\n' "$PUBLIC_HOST" >>/tmp/passbolt-openssl.cnf
+fi
+openssl req -x509 -nodes -newkey rsa:3072 -sha256 -days 825 \
+  -keyout /etc/passbolt/tls/passbolt.key \
+  -out /etc/passbolt/tls/passbolt.crt \
+  -config /tmp/passbolt-openssl.cnf
+chmod 0600 /etc/passbolt/tls/passbolt.key
+chmod 0644 /etc/passbolt/tls/passbolt.crt
+
+NGINX_PASSBOLT=/etc/nginx/sites-available/nginx-passbolt.conf
+sed -i -E 's/([[:space:]]listen[[:space:]]+)(\[::\]:)?80/\1\2443 ssl/' "$NGINX_PASSBOLT"
+sed -i "/server_name/a\\  ssl_certificate /etc/passbolt/tls/passbolt.crt;\\n  ssl_certificate_key /etc/passbolt/tls/passbolt.key;\\n  ssl_protocols TLSv1.2 TLSv1.3;" "$NGINX_PASSBOLT"
+cat >/etc/nginx/conf.d/passbolt-http-redirect.conf <<EOF
+server {
+  listen 80;
+  listen [::]:80;
+  server_name $PUBLIC_HOST $PUBLIC_IP;
+  return 301 https://\$host\$request_uri;
+}
+EOF
 cat >/etc/passbolt/passbolt.php <<PHP
 <?php
 return [
-    'App' => ['fullBaseUrl' => 'http://' . base64_decode('$PUBLIC_HOST_B64')],
+    'App' => ['fullBaseUrl' => 'https://' . base64_decode('$PUBLIC_HOST_B64')],
     'Datasources' => ['default' => [
         'host' => base64_decode('${database_host_b64}'),
         'port' => '3306',
@@ -50,5 +94,6 @@ for attempt in $(seq 1 60); do
   sleep 5
 done
 sudo -H -u www-data /usr/share/php/passbolt/bin/cake passbolt migrate
+nginx -t
 systemctl enable --now nginx
 touch /var/lib/privacy-stack-ready

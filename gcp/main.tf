@@ -186,7 +186,7 @@ output "public_ip" {
   value = try(google_compute_instance.stack.network_interface[0].access_config[0].nat_ip, null)
 }
 output "passbolt_url" {
-  value = var.passbolt_domain != null ? "http://${var.passbolt_domain}" : try("http://${google_compute_instance.stack.network_interface[0].access_config[0].nat_ip}", null)
+  value = var.passbolt_domain != null ? "https://${var.passbolt_domain}" : try("https://${google_compute_instance.stack.network_interface[0].access_config[0].nat_ip}", null)
 }
 output "nextcloud_public_ip" {
   value = var.deployment_mode == "distributed" ? try(google_compute_instance.nextcloud[0].network_interface[0].access_config[0].nat_ip, null) : try(google_compute_instance.stack.network_interface[0].access_config[0].nat_ip, null)

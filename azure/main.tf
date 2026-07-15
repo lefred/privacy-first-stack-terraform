@@ -266,7 +266,7 @@ output "public_ip" {
   value = try(azurerm_public_ip.stack[0].ip_address, null)
 }
 output "passbolt_url" {
-  value = var.passbolt_domain != null ? "http://${var.passbolt_domain}" : try("http://${azurerm_public_ip.stack[0].ip_address}", null)
+  value = var.passbolt_domain != null ? "https://${var.passbolt_domain}" : try("https://${azurerm_public_ip.stack[0].ip_address}", null)
 }
 output "nextcloud_public_ip" {
   value = var.deployment_mode == "distributed" && var.assign_public_ip ? azurerm_public_ip.nextcloud[0].ip_address : null

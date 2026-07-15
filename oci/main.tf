@@ -292,7 +292,7 @@ output "public_ip" {
   value = data.oci_core_vnic.stack.public_ip_address
 }
 output "passbolt_url" {
-  value = var.passbolt_domain != null ? "http://${var.passbolt_domain}" : "http://${data.oci_core_vnic.stack.public_ip_address}"
+  value = var.passbolt_domain != null ? "https://${var.passbolt_domain}" : "https://${data.oci_core_vnic.stack.public_ip_address}"
 }
 output "nextcloud_public_ip" {
   value = var.deployment_mode == "distributed" ? oci_core_instance.nextcloud[0].public_ip : data.oci_core_vnic.stack.public_ip_address

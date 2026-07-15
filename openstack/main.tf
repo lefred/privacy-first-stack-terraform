@@ -211,7 +211,7 @@ output "public_ip" {
   value = try(openstack_networking_floatingip_v2.stack[0].address, null)
 }
 output "passbolt_url" {
-  value = var.passbolt_domain != null ? "http://${var.passbolt_domain}" : try("http://${openstack_networking_floatingip_v2.stack[0].address}", null)
+  value = var.passbolt_domain != null ? "https://${var.passbolt_domain}" : try("https://${openstack_networking_floatingip_v2.stack[0].address}", null)
 }
 output "nextcloud_public_ip" {
   value = var.deployment_mode == "distributed" ? try(openstack_networking_floatingip_v2.nextcloud[0].address, null) : try(openstack_networking_floatingip_v2.stack[0].address, null)

@@ -212,7 +212,7 @@ output "nextcloud_url" {
   value = "http://${coalesce(aws_instance.stack.public_ip, aws_instance.stack.private_ip)}:8080"
 }
 output "passbolt_url" {
-  value = "http://${var.passbolt_domain != null ? var.passbolt_domain : aws_instance.stack.public_ip}"
+  value = "https://${var.passbolt_domain != null ? var.passbolt_domain : aws_instance.stack.public_ip}"
 }
 output "nextcloud_public_ip" {
   value = var.deployment_mode == "distributed" ? aws_instance.nextcloud[0].public_ip : aws_instance.stack.public_ip

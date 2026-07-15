@@ -50,7 +50,7 @@ Cloud-init progress is available on the instance in `/var/log/privacy-stack-inst
 
 In consolidated mode the native endpoints are Passbolt on ports 80/443 and Nextcloud on port 8080. Distributed mode keeps the same application ports, but each endpoint uses its own public IP. Provider firewall rules and the Ubuntu guest firewall rules allow these ports. No port forwarding is used.
 
-Passbolt is initially configured for HTTP so the deployment does not assume a DNS or certificate provider. Put a managed TLS load balancer/reverse proxy in front, or configure Certbot after DNS points to the instance. Restrict SSH with `admin_cidr`; the application CIDR defaults should also be narrowed for private deployments.
+Passbolt is configured for HTTPS using a self-signed certificate whose subject alternative names include the detected public IP and, when provided, `passbolt_domain`. HTTP redirects to HTTPS. Browsers will warn until the certificate is explicitly trusted; for production, replace it with a certificate from a trusted CA or put a managed TLS load balancer/reverse proxy in front. Restrict SSH with `admin_cidr`; the application CIDR defaults should also be narrowed for private deployments.
 
 The generated cloud-init and Terraform state contain secrets. Use encrypted remote state with tightly restricted access.
 
