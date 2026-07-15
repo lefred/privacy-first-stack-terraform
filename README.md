@@ -4,6 +4,17 @@ This bundle installs the [Privacy-First Stack](https://ecohub.mariadb.org/soluti
 
 Supported roots: `aws`, `azure`, `gcp`, `openstack`, and `oci`.
 
+## Choose your cloud
+
+<!-- Replace each provider link with its env0 Run/Launch URL after creating the five templates. -->
+
+| | | |
+|:---:|:---:|:---:|
+| [![Deploy on AWS](https://img.shields.io/badge/Deploy-AWS-FF9900?style=for-the-badge&logo=amazonwebservices&logoColor=white)](aws) | [![Deploy on Azure](https://img.shields.io/badge/Deploy-Azure-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white)](azure) | [![Deploy on Google Cloud](https://img.shields.io/badge/Deploy-Google_Cloud-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](gcp) |
+| [![Deploy on OCI](https://img.shields.io/badge/Deploy-Oracle_Cloud-F80000?style=for-the-badge&logo=oracle&logoColor=white)](oci) | [![Deploy on OpenStack](https://img.shields.io/badge/Deploy-OpenStack-ED1944?style=for-the-badge&logo=openstack&logoColor=white)](openstack) | |
+
+The buttons currently open the selected provider configuration. To turn them into direct guided deployments, create the five env0 templates described in [ENV0_PUBLIC_DEPLOYMENT.md](ENV0_PUBLIC_DEPLOYMENT.md), then replace each relative link with the generated env0 launch URL.
+
 ## Deployment topology
 
 Every provider exposes the same `deployment_mode` variable:
@@ -42,3 +53,16 @@ In consolidated mode the native endpoints are Passbolt on ports 80/443 and Nextc
 Passbolt is initially configured for HTTP so the deployment does not assume a DNS or certificate provider. Put a managed TLS load balancer/reverse proxy in front, or configure Certbot after DNS points to the instance. Restrict SSH with `admin_cidr`; the application CIDR defaults should also be narrowed for private deployments.
 
 The generated cloud-init and Terraform state contain secrets. Use encrypted remote state with tightly restricted access.
+
+## Local deployment
+
+```sh
+git clone https://github.com/lefred/privacy-first-stack-terraform.git
+cd privacy-first-stack-terraform/oci # or aws, azure, gcp, openstack
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform plan
+terraform apply
+```
+
+To generate the downloadable multicloud archive, run `make bundle` from the repository root.
