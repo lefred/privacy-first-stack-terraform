@@ -43,8 +43,9 @@ variable "assign_public_ip" {
   default = true
 }
 variable "key_name" {
-  type    = string
-  default = null
+  description = "Existing EC2 key-pair name. When null, Terraform registers ssh_public_key (or ssh_authorized_keys_path) as an EC2 key pair."
+  type        = string
+  default     = null
 }
 variable "ssh_public_key" {
   description = "SSH public-key content. When null, ssh_authorized_keys_path is read on the Terraform runner."

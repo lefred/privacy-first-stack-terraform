@@ -12,7 +12,7 @@ provider "aws" {
 module "stack" {
   source                   = "../modules/native_stack"
   hostname                 = var.name
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   passbolt_domain          = var.passbolt_domain
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
@@ -27,7 +27,7 @@ module "database" {
   source                   = "../modules/native_stack"
   role                     = "database"
   hostname                 = "${var.name}-database"
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
   passbolt_db_password     = var.passbolt_db_password
@@ -39,7 +39,7 @@ module "nextcloud" {
   source                   = "../modules/native_stack"
   role                     = "nextcloud"
   hostname                 = "${var.name}-nextcloud"
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
   passbolt_db_password     = var.passbolt_db_password
@@ -101,9 +101,18 @@ resource "aws_route_table_association" "stack" {
   route_table_id = aws_route_table.stack[0].id
 }
 locals {
+  ssh_public_key          = var.ssh_authorized_keys_path != null ? trimspace(file(var.ssh_authorized_keys_path)) : trimspace(var.ssh_public_key)
+  key_name                = var.key_name != null ? var.key_name : aws_key_pair.stack[0].key_name
   subnet_id               = var.subnet_id != null ? var.subnet_id : aws_subnet.stack[0].id
   vpc_id                  = var.subnet_id != null ? data.aws_subnet.selected[0].vpc_id : aws_vpc.stack[0].id
   application_subnet_cidr = var.subnet_id != null ? data.aws_subnet.selected[0].cidr_block : var.subnet_cidr
+}
+resource "aws_key_pair" "stack" {
+  count      = var.key_name == null ? 1 : 0
+  key_name   = "${var.name}-terraform"
+  public_key = local.ssh_public_key
+
+  tags = { Name = "${var.name}-terraform" }
 }
 resource "aws_security_group" "stack" {
   name_prefix = "${var.name}-"
@@ -147,7 +156,7 @@ resource "aws_instance" "stack" {
   subnet_id                   = local.subnet_id
   vpc_security_group_ids      = [aws_security_group.stack.id]
   associate_public_ip_address = var.assign_public_ip
-  key_name                    = var.key_name
+  key_name                    = local.key_name
   user_data                   = module.stack.cloud_init
   user_data_replace_on_change = true
   root_block_device {
@@ -170,7 +179,7 @@ resource "aws_instance" "database" {
   subnet_id                   = local.subnet_id
   vpc_security_group_ids      = [aws_security_group.stack.id]
   associate_public_ip_address = false
-  key_name                    = var.key_name
+  key_name                    = local.key_name
   user_data                   = module.database[0].cloud_init
   user_data_replace_on_change = true
   root_block_device {
@@ -191,7 +200,7 @@ resource "aws_instance" "nextcloud" {
   subnet_id                   = local.subnet_id
   vpc_security_group_ids      = [aws_security_group.stack.id]
   associate_public_ip_address = var.assign_public_ip
-  key_name                    = var.key_name
+  key_name                    = local.key_name
   user_data                   = module.nextcloud[0].cloud_init
   user_data_replace_on_change = true
   root_block_device {

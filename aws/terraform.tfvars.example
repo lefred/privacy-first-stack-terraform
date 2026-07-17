@@ -3,7 +3,11 @@ region = "eu-west-1"
 # Optional: reuse an existing subnet. Omit to create a complete VPC and subnet.
 # subnet_id = "subnet-..."
 admin_cidr = "203.0.113.10/32"
+# Terraform registers this key with EC2 and attaches it to every instance.
 ssh_public_key = "ssh-ed25519 AAAA..."
+# Alternatively, use an existing EC2 key pair (the public key above is still
+# installed by cloud-init):
+# key_name = "my-existing-key-pair"
 passbolt_domain = "passbolt.example.com"
 mariadb_root_password = "replace-me"
 nextcloud_db_password = "replace-me"

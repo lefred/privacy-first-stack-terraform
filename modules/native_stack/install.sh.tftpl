@@ -5,6 +5,17 @@ export DEBIAN_FRONTEND=noninteractive
 
 decode() { printf '%s' "$1" | base64 -d; }
 sql_escape() { printf '%s' "$1" | sed "s/'/''/g"; }
+POLICY_RC_D_CREATED=false
+if [ ! -e /usr/sbin/policy-rc.d ]; then
+  printf '#!/bin/sh\nexit 101\n' >/usr/sbin/policy-rc.d
+  chmod 0755 /usr/sbin/policy-rc.d
+  POLICY_RC_D_CREATED=true
+fi
+cleanup_policy_rc_d() {
+  if [ "$POLICY_RC_D_CREATED" = true ]; then rm -f /usr/sbin/policy-rc.d; fi
+}
+trap cleanup_policy_rc_d EXIT
+
 ROOT_RAW_PASSWORD=$(decode '${mariadb_root_password_b64}')
 NEXTCLOUD_RAW_PASSWORD=$(decode '${nextcloud_db_password_b64}')
 PASSBOLT_RAW_PASSWORD=$(decode '${passbolt_db_password_b64}')
@@ -27,23 +38,41 @@ bash ./passbolt-repo-setup.ce.sh
 
 echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
 echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
-apt-get install -y apache2 nginx mariadb-server curl bzip2 ca-certificates gnupg jq openssl iptables-persistent \
+apt-get install -y apache2 mariadb-server curl bzip2 ca-certificates gnupg jq openssl iptables-persistent \
   libapache2-mod-php php php-cli php-curl php-gd php-mbstring php-mysql \
   php-xml php-zip php-bz2 php-intl php-gmp php-imagick php-apcu
 
-# Both web servers default to port 80. Stop them until Apache has been moved to
-# 8080; Nginx will later own 80/443 for Passbolt.
-systemctl stop apache2 nginx || true
+# Package service starts are suppressed above. Move Apache to 8080 before
+# allowing either web server to start; Nginx will own ports 80 and 443.
+systemctl stop apache2 || true
+sed -i 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf
+sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-available/000-default.conf
+apt-get install -y nginx
+systemctl stop nginx || true
+cleanup_policy_rc_d
+trap - EXIT
 systemctl enable --now mariadb
 
 PUBLIC_IP=""
-for attempt in $(seq 1 15); do
-  PUBLIC_IP=$(curl -fsS -H 'Authorization: Bearer Oracle' \
-      http://169.254.169.254/opc/v2/vnics/ 2>/dev/null | \
-      jq -r 'map(select(.publicIp != null))[0].publicIp // empty')
-  [ -n "$PUBLIC_IP" ] && break
-  sleep 2
-done
+# AWS requires an IMDSv2 token. Keep every provider probe in an `if` condition
+# so an unavailable metadata endpoint cannot terminate this `set -e` script.
+AWS_IMDS_TOKEN=""
+if AWS_IMDS_TOKEN=$(curl -fsS --max-time 2 -X PUT \
+    -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' \
+    http://169.254.169.254/latest/api/token); then
+  if ! PUBLIC_IP=$(curl -fsS --max-time 2 \
+      -H "X-aws-ec2-metadata-token: $AWS_IMDS_TOKEN" \
+      http://169.254.169.254/latest/meta-data/public-ipv4); then
+    PUBLIC_IP=""
+  fi
+fi
+if [ -z "$PUBLIC_IP" ]; then
+  if ! PUBLIC_IP=$(curl -fsS --max-time 2 -H 'Authorization: Bearer Oracle' \
+      http://169.254.169.254/opc/v2/vnics/ | \
+      jq -r 'map(select(.publicIp != null))[0].publicIp // empty'); then
+    PUBLIC_IP=""
+  fi
+fi
 if [ -z "$PUBLIC_IP" ]; then PUBLIC_IP=$(curl -4 -fsS --max-time 10 https://api.ipify.org || true); fi
 if [ -z "$PUBLIC_IP" ]; then PUBLIC_IP=$(hostname -I | awk '{print $1}'); fi
 if [ -z "$PASSBOLT_DOMAIN" ]; then PASSBOLT_DOMAIN="$PUBLIC_IP"; fi
@@ -70,8 +99,6 @@ GRANT ALL PRIVILEGES ON passbolt.* TO 'passbolt'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 
-sed -i 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf
-sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-available/000-default.conf
 a2enmod rewrite headers env dir mime setenvif
 
 if [ ! -f /var/www/nextcloud/occ ]; then
