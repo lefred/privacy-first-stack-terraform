@@ -109,7 +109,7 @@ resource "oci_core_subnet" "stack" {
 }
 locals {
   compartment_id          = coalesce(var.compartment_id, var.compartment_ocid)
-  ssh_public_key          = var.ssh_authorized_keys_path != null ? trimspace(file(var.ssh_authorized_keys_path)) : trimspace(var.ssh_public_key)
+  ssh_public_key          = var.ssh_authorized_keys_path != null ? trimspace(file(var.ssh_authorized_keys_path)) : trimspace(coalesce(var.ssh_public_key, ""))
   subnet_id               = var.subnet_id != null ? var.subnet_id : oci_core_subnet.stack[0].id
   vcn_id                  = var.subnet_id != null ? data.oci_core_subnet.selected[0].vcn_id : oci_core_vcn.stack[0].id
   discovered_image_id     = try(data.oci_core_images.ubuntu[0].images[0].id, null)

@@ -12,7 +12,7 @@ provider "openstack" {
 module "stack" {
   source                   = "../modules/native_stack"
   hostname                 = var.name
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   passbolt_domain          = var.passbolt_domain
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
@@ -27,7 +27,7 @@ module "database" {
   source                   = "../modules/native_stack"
   role                     = "database"
   hostname                 = "${var.name}-database"
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
   passbolt_db_password     = var.passbolt_db_password
@@ -39,7 +39,7 @@ module "nextcloud" {
   source                   = "../modules/native_stack"
   role                     = "nextcloud"
   hostname                 = "${var.name}-nextcloud"
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
   passbolt_db_password     = var.passbolt_db_password
@@ -81,8 +81,9 @@ resource "openstack_networking_router_interface_v2" "stack" {
   subnet_id = openstack_networking_subnet_v2.stack[0].id
 }
 locals {
-  network_id = var.network_id != null ? var.network_id : openstack_networking_network_v2.stack[0].id
-  image_id   = var.image_id != null ? var.image_id : data.openstack_images_image_v2.ubuntu[0].id
+  ssh_public_key = var.ssh_authorized_keys_path != null ? trimspace(file(var.ssh_authorized_keys_path)) : trimspace(coalesce(var.ssh_public_key, ""))
+  network_id     = var.network_id != null ? var.network_id : openstack_networking_network_v2.stack[0].id
+  image_id       = var.image_id != null ? var.image_id : data.openstack_images_image_v2.ubuntu[0].id
 }
 resource "openstack_networking_secgroup_v2" "stack" {
   name        = "${var.name}-sg"
@@ -149,6 +150,12 @@ resource "openstack_compute_instance_v2" "stack" {
     boot_index            = 0
     destination_type      = "volume"
     delete_on_termination = true
+  }
+  lifecycle {
+    precondition {
+      condition     = length(local.ssh_public_key) > 40 && can(regex("^(ssh-(rsa|ed25519)|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/]+={0,3}( .*)?$", local.ssh_public_key))
+      error_message = "The resolved SSH public key is invalid or still an example placeholder. Set ssh_authorized_keys_path to a real .pub file or set ssh_public_key to the complete public key."
+    }
   }
 }
 resource "openstack_compute_instance_v2" "database" {

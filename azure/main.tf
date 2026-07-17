@@ -14,7 +14,7 @@ provider "azurerm" {
 module "stack" {
   source                   = "../modules/native_stack"
   hostname                 = var.name
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   passbolt_domain          = var.passbolt_domain
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
@@ -29,7 +29,7 @@ module "database" {
   source                   = "../modules/native_stack"
   role                     = "database"
   hostname                 = "${var.name}-database"
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
   passbolt_db_password     = var.passbolt_db_password
@@ -41,7 +41,7 @@ module "nextcloud" {
   source                   = "../modules/native_stack"
   role                     = "nextcloud"
   hostname                 = "${var.name}-nextcloud"
-  ssh_public_key           = var.ssh_public_key
+  ssh_public_key           = local.ssh_public_key
   mariadb_root_password    = var.mariadb_root_password
   nextcloud_db_password    = var.nextcloud_db_password
   passbolt_db_password     = var.passbolt_db_password
@@ -49,6 +49,7 @@ module "nextcloud" {
   database_host            = azurerm_network_interface.database[0].private_ip_address
 }
 locals {
+  ssh_public_key      = var.ssh_authorized_keys_path != null ? trimspace(file(var.ssh_authorized_keys_path)) : trimspace(coalesce(var.ssh_public_key, ""))
   resource_group_name = coalesce(var.resource_group_name, "${var.name}-rg")
   subnet_id           = var.subnet_id != null ? var.subnet_id : azurerm_subnet.stack[0].id
 }
@@ -196,7 +197,7 @@ resource "azurerm_linux_virtual_machine" "stack" {
   depends_on                      = [azurerm_resource_group.stack]
   admin_ssh_key {
     username   = "stackadmin"
-    public_key = var.ssh_public_key
+    public_key = local.ssh_public_key
   }
   os_disk {
     caching              = "ReadWrite"
@@ -208,6 +209,12 @@ resource "azurerm_linux_virtual_machine" "stack" {
     offer     = "ubuntu-24_04-lts"
     sku       = "server"
     version   = "latest"
+  }
+  lifecycle {
+    precondition {
+      condition     = length(local.ssh_public_key) > 40 && can(regex("^(ssh-(rsa|ed25519)|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/]+={0,3}( .*)?$", local.ssh_public_key))
+      error_message = "The resolved SSH public key is invalid or still an example placeholder. Set ssh_authorized_keys_path to a real .pub file or set ssh_public_key to the complete public key."
+    }
   }
 }
 resource "azurerm_linux_virtual_machine" "database" {
@@ -222,7 +229,7 @@ resource "azurerm_linux_virtual_machine" "database" {
   disable_password_authentication = true
   admin_ssh_key {
     username   = "stackadmin"
-    public_key = var.ssh_public_key
+    public_key = local.ssh_public_key
   }
   os_disk {
     caching              = "ReadWrite"
@@ -248,7 +255,7 @@ resource "azurerm_linux_virtual_machine" "nextcloud" {
   disable_password_authentication = true
   admin_ssh_key {
     username   = "stackadmin"
-    public_key = var.ssh_public_key
+    public_key = local.ssh_public_key
   }
   os_disk {
     caching              = "ReadWrite"

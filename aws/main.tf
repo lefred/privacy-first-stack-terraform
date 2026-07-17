@@ -101,7 +101,7 @@ resource "aws_route_table_association" "stack" {
   route_table_id = aws_route_table.stack[0].id
 }
 locals {
-  ssh_public_key          = var.ssh_authorized_keys_path != null ? trimspace(file(var.ssh_authorized_keys_path)) : trimspace(var.ssh_public_key)
+  ssh_public_key          = var.ssh_authorized_keys_path != null ? trimspace(file(var.ssh_authorized_keys_path)) : trimspace(coalesce(var.ssh_public_key, ""))
   key_name                = var.key_name != null ? var.key_name : aws_key_pair.stack[0].key_name
   subnet_id               = var.subnet_id != null ? var.subnet_id : aws_subnet.stack[0].id
   vpc_id                  = var.subnet_id != null ? data.aws_subnet.selected[0].vpc_id : aws_vpc.stack[0].id
@@ -113,6 +113,7 @@ resource "aws_key_pair" "stack" {
   public_key = local.ssh_public_key
 
   tags = { Name = "${var.name}-terraform" }
+
 }
 resource "aws_security_group" "stack" {
   name_prefix = "${var.name}-"
@@ -170,6 +171,12 @@ resource "aws_instance" "stack" {
   }
   tags = {
     Name = var.deployment_mode == "consolidated" ? var.name : "${var.name}-passbolt"
+  }
+  lifecycle {
+    precondition {
+      condition     = length(local.ssh_public_key) > 40 && can(regex("^(ssh-(rsa|ed25519)|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/]+={0,3}( .*)?$", local.ssh_public_key))
+      error_message = "The resolved SSH public key is invalid or still an example placeholder. Set ssh_authorized_keys_path to a real .pub file or set ssh_public_key to the complete public key."
+    }
   }
 }
 resource "aws_instance" "database" {
