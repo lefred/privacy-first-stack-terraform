@@ -47,7 +47,19 @@ variable "key_name" {
   default = null
 }
 variable "ssh_public_key" {
-  type = string
+  description = "SSH public-key content. When null, ssh_authorized_keys_path is read on the Terraform runner."
+  type        = string
+  default     = null
+}
+variable "ssh_authorized_keys_path" {
+  description = "Path to an SSH public key on the Terraform runner. Used when ssh_public_key is null."
+  type        = string
+  default     = null
+}
+variable "ssh_private_key_path" {
+  description = "Optional operator SSH private-key path retained for tfvars compatibility; provisioning does not require it."
+  type        = string
+  default     = null
 }
 variable "admin_cidr" {
   type = string
