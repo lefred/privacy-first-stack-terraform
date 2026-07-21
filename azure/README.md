@@ -2,9 +2,6 @@
 
 This is the directory to use to deploy the Privacy-First Stack in Microsoft Azure:
 
-You need to create a project in https://console.cloud.google.com/, here I called it `privacy-first-stack`
-and then you need to login and enable the compute API service for your project:
-
 ```
 az login
 
