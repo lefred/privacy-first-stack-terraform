@@ -1,0 +1,28 @@
+# MariaDB Privacy-First Stack: deployment on Microsoft Azure
+
+This is the directory to use to deploy the Privacy-First Stack in Microsoft Azure:
+
+You need to create a project in https://console.cloud.google.com/, here I called it `privacy-first-stack`
+and then you need to login and enable the compute API service for your project:
+
+```
+az login
+
+az account show --query id --output tsv
+```
+
+And now you can prepare your terraform environment and deploy it:
+
+```
+cp terraform.tfvars.example terraform.tfvars
+-- edit terraform.tvars with your info
+terraform init
+terraform plan
+terraform apply
+```
+
+## Demo
+
+Click to play on Youtube
+
+[![Watch the video](https://i9.ytimg.com/vi/60K4E3jO9dM/sddefault.jpg?v=6a5f71f5&sqp=CIDk_dIG&rs=AOn4CLCQDzYy2H1JKBFLfxj3uiX17nEQ8Q)](https://youtu.be/60K4E3jO9dM)
