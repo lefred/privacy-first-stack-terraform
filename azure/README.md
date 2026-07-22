@@ -22,4 +22,4 @@ terraform apply
 
 Click to play on Youtube
 
-[![Watch the video](https://i9.ytimg.com/vi/jauRdrVM-8k/sddefault.jpg?v=6a5a1feb&sqp=CMjA6NIG&rs=AOn4CLC-QewaC0WrWOexisCCT3UznYgx8Q)](https://youtu.be/jauRdrVM-8k)
+[![Watch the video](https://i9.ytimg.com/vi/jauRdrVM-8k/sddefault.jpg?v=6a5a1feb&sqp=CMjA6NIG&rs=AOn4CLC-QewaC0WrWOexisCCT3UznYgx8Q)](https://youtu.be/60K4E3jO9dM)
